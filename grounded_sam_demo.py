@@ -16,6 +16,7 @@ import GroundingDINO.groundingdino.datasets.transforms as T
 from GroundingDINO.groundingdino.models import build_model
 from GroundingDINO.groundingdino.util.slconfig import SLConfig
 from GroundingDINO.groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
+from duration import Duration
 
 
 # segment anything
@@ -140,9 +141,9 @@ def save_mask_data(output_dir, mask_list, box_list, label_list):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser("Grounded-Segment-Anything Demo", add_help=True)
-    parser.add_argument("--config", type=str, required=True, help="path to config file")
+    parser.add_argument("--config", type=str, required=False, help="path to config file")
     parser.add_argument(
-        "--grounded_checkpoint", type=str, required=True, help="path to checkpoint file"
+        "--grounded_checkpoint", type=str, required=False, help="path to checkpoint file"
     )
     parser.add_argument(
         "--sam_version", type=str, default="vit_h", required=False, help="SAM ViT version: vit_b / vit_l / vit_h"
@@ -156,10 +157,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use_sam_hq", action="store_true", help="using sam-hq for prediction"
     )
-    parser.add_argument("--input_image", type=str, required=True, help="path to image file")
-    parser.add_argument("--text_prompt", type=str, required=True, help="text prompt")
+    parser.add_argument("--input_image", type=str, required=False, help="path to image file")
+    parser.add_argument("--text_prompt", type=str, required=False, help="text prompt")
     parser.add_argument(
-        "--output_dir", "-o", type=str, default="outputs", required=True, help="output directory"
+        "--output_dir", "-o", type=str, default="outputs", required=False, help="output directory"
     )
 
     parser.add_argument("--box_threshold", type=float, default=0.3, help="box threshold")
@@ -168,6 +169,20 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cpu", help="running on cpu only!, default=False")
     parser.add_argument("--bert_base_uncased_path", type=str, required=False, help="bert_base_uncased model path, default=False")
     args = parser.parse_args()
+
+    args.config = "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
+    args.grounded_checkpoint = "./weights/groundingdino_swint_ogc.pth"
+    args.sam_version = "vit_h"
+    args.sam_checkpoint = "./weights/sam_vit_h_4b8939.pth"
+    args.input_image = "/media/levin/DATA/zf/nerf/2024_0601/scenes/5/rgb/es81_sur_back/rgb_00038_sur_back.jpg"
+    args.output_dir = "outputs"
+    args.box_threshold = 0.3
+    args.text_threshold = 0.25
+    args.text_prompt = "Tree . vegetation . road . building . sky . vehicle . pedestrian . curb . pole . traffic cone ."
+    args.device = "cuda"
+
+
+
 
     # cfg
     config_file = args.config  # change the path of the model config file
@@ -193,11 +208,12 @@ if __name__ == "__main__":
 
     # visualize raw image
     image_pil.save(os.path.join(output_dir, "raw_image.jpg"))
-
+    tk = Duration()
     # run grounding dino model
     boxes_filt, pred_phrases = get_grounding_output(
         model, image, text_prompt, box_threshold, text_threshold, device=device
     )
+    print(f"dino {tk.end()}")
 
     # initialize SAM
     if use_sam_hq:
@@ -208,6 +224,7 @@ if __name__ == "__main__":
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     predictor.set_image(image)
 
+    tk.start()
     size = image_pil.size
     H, W = size[1], size[0]
     for i in range(boxes_filt.size(0)):
@@ -224,7 +241,7 @@ if __name__ == "__main__":
         boxes = transformed_boxes.to(device),
         multimask_output = False,
     )
-
+    print(f"sam {tk.end()}")
     # draw output image
     plt.figure(figsize=(10, 10))
     plt.imshow(image)
@@ -238,5 +255,5 @@ if __name__ == "__main__":
         os.path.join(output_dir, "grounded_sam_output.jpg"),
         bbox_inches="tight", dpi=300, pad_inches=0.0
     )
-
+    
     save_mask_data(output_dir, masks, boxes_filt, pred_phrases)
