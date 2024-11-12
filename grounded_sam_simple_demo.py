@@ -97,6 +97,19 @@ cv2.waitKey(0)
 # Prompting SAM with detected boxes
 def segment(sam_predictor: SamPredictor, image: np.ndarray, xyxy: np.ndarray) -> np.ndarray:
     sam_predictor.set_image(image)
+
+    use_parrel = True
+    if use_parrel:
+        device = "cuda"
+        transformed_boxes = sam_predictor.transform.apply_boxes_torch(torch.tensor(xyxy), image.shape[:2]).to(device)
+        masks, _, _ = sam_predictor.predict_torch(
+            point_coords = None,
+            point_labels = None,
+            boxes = transformed_boxes.to(device),
+            multimask_output = False,
+        )
+        return masks.detach().cpu().numpy().squeeze()
+
     result_masks = []
     for box in xyxy:
         masks, scores, logits = sam_predictor.predict(
